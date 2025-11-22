@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Serial Monitor</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      #console {
+        border: 1px solid #ccc;
+        padding: 15px;
+        height: 150px;
+        overflow-y: auto;
+        margin-top: 20px;
+        background: #f9f9f9;
+        white-space: pre-wrap;
+      }
+      button {
+        padding: 10px 15px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      button:disabled {
+        background: #cccccc;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Serial Monitor</h1>
+    <button id="connect">Connect to Device</button>
+    <button id="disconnect" disabled>Disconnect</button>
+    <div id="console"></div>
+    <div id="viewer"></div>
+
+    <script>
+      let port;
+      let reader;
+      const outputElement = document.getElementById("console");
+      const connectBtn = document.getElementById("connect");
+      const disconnectBtn = document.getElementById("disconnect");
+      const viewer = document.getElementById("viewer");
+
+      // Функция для вывода данных в консоль и на экран
+      function logToScreen(message) {
+        // console.log(message); // Вывод в консоль браузера
+        outputElement.innerHTML += message + "\n"; // Вывод на экран
+        outputElement.scrollTop = outputElement.scrollHeight; // Автопрокрутка
+      }
+
+      function updateContent(message) {
+        viewer.innerHTML = message;
+      }
+
+      // Подключение к устройству
+      connectBtn.addEventListener("click", async () => {
+        try {
+          port = await navigator.serial.requestPort();
+          await port.open({ baudRate: 9600 });
+
+          reader = port.readable.getReader();
+          connectBtn.disabled = true;
+          disconnectBtn.disabled = false;
+          logToScreen("Connected to device...");
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            // Выводим сырые данные и преобразованные в текст
+            // const text = new TextDecoder().decode(value);
+            const text = new TextDecoder()
+              .decode(value)
+              .replace(/\x1B\[[0-9;]*[A-Za-z]/g, "") // Удаляем ANSI escape-последовательности
+              .replace("\n>", ""); //удаляем конец строки
+            // logToScreen(text);
+            updateContent(text);
+          }
+        } catch (error) {
+          logToScreen(`Error: ${error.message}`);
+        }
+      });
+
+      // Отключение от устройства
+      disconnectBtn.addEventListener("click", async () => {
+        try {
+          if (reader) {
+            await reader.cancel();
+            reader.releaseLock();
+            reader = null;
+          }
+          if (port) {
+            await port.close();
+            port = null;
+          }
+          connectBtn.disabled = false;
+          disconnectBtn.disabled = true;
+          logToScreen("Disconnected from device");
+        } catch (error) {
+          logToScreen(`Error: ${error.message}`);
+        }
+      });
+
+      // Обработка HTML-разметки (если данные содержат HTML)
+      function safeHtml(html) {
+        const div = document.createElement("div");
+        div.textContent = html;
+        return div.innerHTML;
+      }
+    </script>
+  </body>
+</html>
